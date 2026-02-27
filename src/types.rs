@@ -102,44 +102,32 @@ pub enum Z4 {
 use Z4::*;
 
 impl Z4 {
-    const fn next(self) -> Self {
-        match self {
-            Zero => One,
-            One => Two,
-            Two => Three,
-            Three => Zero,
-        }
-    }
-
-    const fn prev(self) -> Self {
-        self.next().next().next()
-    }
-
     pub const ALL: [Z4; 4] = [Zero, One, Two, Three];
 
     pub const fn val(self) -> u8 {
         self as u8
     }
 
-    pub const fn neg(mut self) -> Self {
-        let mut res = Zero;
-        while !matches!(self, Zero) {
-            self = self.prev();
-            res = res.prev();
+    pub const fn from_val(val: u8) -> Self {
+        match val & 0b11 {
+            0 => Self::Zero,
+            1 => Self::One,
+            2 => Self::Two,
+            3 => Self::Three,
+            _ => unreachable!(),
         }
-        res
     }
 
-    pub const fn add(mut self, mut rhs: Self) -> Self {
-        while !matches!(rhs, Zero) {
-            self = self.next();
-            rhs = rhs.prev();
-        }
-        self
+    pub const fn neg(self) -> Self {
+        Self::from_val(self.val().wrapping_neg())
+    }
+
+    pub const fn add(self, rhs: Self) -> Self {
+        Self::from_val(self.val() + rhs.val())
     }
 
     pub const fn sub(self, rhs: Self) -> Self {
-        self.add(rhs.neg())
+        Self::from_val(self.val().wrapping_sub(rhs.val()))
     }
 }
 
