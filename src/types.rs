@@ -392,7 +392,7 @@ impl Debug for AxialMove {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Rotation(u8);
+pub struct Rotation(pub(crate) u8);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Diagonal {
