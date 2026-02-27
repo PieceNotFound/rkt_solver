@@ -533,7 +533,7 @@ impl Rotation {
             };
 
             let first = AxialRotation::new(axis, by);
-            let rest = self * -Self::axial(axis, by);
+            let rest = -Self::axial(axis, by) * self;
             let second = rest.to_axials().next().unwrap();
             [Some(first), Some(second)]
         }
