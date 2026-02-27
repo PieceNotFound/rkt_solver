@@ -85,6 +85,11 @@ impl Face {
     pub const fn is_coaxial(self, rhs: Face) -> bool {
         self.axis().eq(rhs.axis())
     }
+
+    pub const ALL: [Self; 6] = {
+        use Face::*;
+        [R, U, F, L, D, B]
+    };
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -392,7 +397,7 @@ impl Debug for AxialMove {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Rotation(pub(crate) u8);
+pub struct Rotation(u8);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Diagonal {
@@ -407,32 +412,6 @@ impl Diagonal {
 
     const fn from_u8(val: u8) -> Self {
         Self::ALL[(val & 0b11) as usize]
-    }
-}
-
-impl Neg for Rotation {
-    type Output = Self;
-
-    fn neg(self) -> Self::Output {
-        let mut out = [Diagonal::UFR; 4];
-        for (i, v) in self.to_array().into_iter().enumerate() {
-            out[v as usize] = Diagonal::from_u8(i as u8);
-        }
-        Self::from_array(out)
-    }
-}
-
-impl Mul for Rotation {
-    type Output = Self;
-
-    fn mul(self, rhs: Self) -> Self::Output {
-        let this = self.to_array();
-        let rhs = rhs.to_array();
-        let mut out = [Diagonal::UFR; 4];
-        for i in Diagonal::ALL {
-            out[i as usize] = this[rhs[i as usize] as usize];
-        }
-        Self::from_array(out)
     }
 }
 
@@ -469,29 +448,111 @@ impl Rotation {
         ]
     };
 
-    pub fn get(self, face: Face) -> Face {
+    const fn get_(self, face: Face) -> Face {
         let this = self.to_array();
         let lookup = Self::DATA[face as usize];
-        let mut looked_up = lookup.map(|v| this[v as usize]);
-        let pos = looked_up
-            .into_iter()
-            .position(|v| v == Diagonal::UFR)
-            .unwrap();
+        let mut pos = 0;
+        let mut looked_up = [Diagonal::UFR; 4];
+        let mut i = 0;
+        while i < looked_up.len() {
+            looked_up[i] = this[lookup[i] as usize];
+            if matches!(looked_up[i], Diagonal::UFR) {
+                pos = i;
+            }
+            i += 1;
+        }
         looked_up.rotate_left(pos);
-        let i = Self::DATA.into_iter().position(|v| v == looked_up).unwrap();
-        match i {
-            0 => Face::R,
-            1 => Face::U,
-            2 => Face::F,
-            3 => Face::L,
-            4 => Face::D,
-            5 => Face::B,
-            _ => unreachable!(),
+        let mut i = 0;
+        loop {
+            let el = Self::DATA[i];
+            if el[1] as u8 == looked_up[1] as u8
+                && el[2] as u8 == looked_up[2] as u8
+                && el[3] as u8 == looked_up[3] as u8
+            {
+                break Face::ALL[i];
+            }
+            i += 1;
         }
     }
 
-    pub fn apply(self, face: Face) -> Face {
-        (-self).get(face)
+    pub const fn get(self, face: Face) -> Face {
+        const LUT: [[Face; 6]; 256] = {
+            let mut out = [[Face::R; 6]; 256];
+            let mut i = 0;
+            while i < Rotation::ALL.len() {
+                let mut j = 0;
+                while j < Face::ALL.len() {
+                    let rot = Rotation::ALL[i];
+                    out[rot.0 as usize][j] = rot.get_(Face::ALL[j]);
+                    j += 1;
+                }
+                i += 1;
+            }
+            out
+        };
+
+        LUT[self.0 as usize][face as usize]
+    }
+
+    const fn apply_(self, face: Face) -> Face {
+        self.inv().get(face)
+    }
+
+    pub const fn apply(self, face: Face) -> Face {
+        const LUT: [[Face; 6]; 256] = {
+            let mut out = [[Face::R; 6]; 256];
+            let mut i = 0;
+            while i < Rotation::ALL.len() {
+                let mut j = 0;
+                while j < Face::ALL.len() {
+                    let rot = Rotation::ALL[i];
+                    out[rot.0 as usize][j] = rot.apply_(Face::ALL[j]);
+                    j += 1;
+                }
+                i += 1;
+            }
+            out
+        };
+
+        LUT[self.0 as usize][face as usize]
+    }
+
+    const fn inv_(self) -> Self {
+        let mut out = [Diagonal::UFR; 4];
+        let this = self.to_array();
+        let mut i = 0;
+        while i < this.len() {
+            out[this[i] as usize] = Diagonal::from_u8(i as u8);
+            i += 1;
+        }
+        Self::from_array(out)
+    }
+
+    pub const fn inv(self) -> Self {
+        const LUT: [Rotation; 256] = {
+            let mut out = [Rotation::ID; 256];
+            let mut i = 0;
+            while i < Rotation::ALL.len() {
+                let rot = Rotation::ALL[i];
+                out[rot.0 as usize] = rot.inv_();
+                i += 1;
+            }
+            out
+        };
+
+        LUT[self.0 as usize]
+    }
+
+    pub const fn mul(self, rhs: Self) -> Self {
+        let this = self.to_array();
+        let rhs = rhs.to_array();
+        let mut out = [Diagonal::UFR; 4];
+        let mut i = 0;
+        while i < out.len() {
+            out[i] = this[rhs[i] as usize];
+            i += 1;
+        }
+        Self::from_array(out)
     }
 
     pub const ID: Self = Self(0b_11_10_01_00);
@@ -509,6 +570,20 @@ impl Rotation {
         }
         result
     };
+
+    pub const fn index(self) -> u8 {
+        const MAP: [u8; 256] = {
+            let mut out = [0; 256];
+            let mut i = 0;
+            while i < Rotation::ALL.len() {
+                out[Rotation::ALL[i].0 as usize] = i as u8;
+                i += 1;
+            }
+            out
+        };
+
+        MAP[self.0 as usize]
+    }
 
     pub fn axial(axis: Axis, by: Z4) -> Self {
         let mut out = [Diagonal::UFR; 4];
@@ -562,6 +637,22 @@ impl Rotation {
         }
         .into_iter()
         .flatten()
+    }
+}
+
+impl Neg for Rotation {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        self.inv()
+    }
+}
+
+impl Mul for Rotation {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        self.mul(rhs)
     }
 }
 

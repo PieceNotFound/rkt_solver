@@ -136,17 +136,7 @@ impl DpIndex for Rotation {
     }
 
     fn to_index(&self, &(): &Self::Runtime) -> usize {
-        const MAP: [u8; 256] = {
-            let mut out = [0; 256];
-            let mut i = 0;
-            while i < Rotation::ALL.len() {
-                out[Rotation::ALL[i].0 as usize] = i as u8;
-                i += 1;
-            }
-            out
-        };
-
-        MAP[self.0 as usize] as usize
+        self.index() as usize
     }
 }
 
