@@ -1,5 +1,5 @@
 use core::{
-    fmt::{Debug, Display},
+    fmt::{self, Debug, Display},
     str::FromStr,
 };
 
@@ -9,8 +9,19 @@ use crate::data::{
     z4::Z4,
 };
 
+macro_rules! debug_as_display {
+    ($ty:ty) => {
+        impl Debug for $ty {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                Display::fmt(self, f)
+            }
+        }
+    };
+}
+
+debug_as_display!(Move);
 impl Display for Move {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "{:?}{}",
@@ -22,12 +33,6 @@ impl Display for Move {
                 Z4::Three => "'",
             }
         )
-    }
-}
-
-impl Debug for Move {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(self, f)
     }
 }
 
@@ -60,8 +65,9 @@ impl FromStr for Move {
     }
 }
 
-impl Debug for AxialMove {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+debug_as_display!(AxialMove);
+impl Display for AxialMove {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.is_zero() {
             write!(f, "(0)")
         } else {
@@ -77,8 +83,9 @@ impl Debug for AxialMove {
     }
 }
 
+debug_as_display!(AxialRotation);
 impl Display for AxialRotation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "{}{}",
@@ -97,14 +104,9 @@ impl Display for AxialRotation {
     }
 }
 
-impl Debug for AxialRotation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(self, f)
-    }
-}
-
+debug_as_display!(Rotation);
 impl Display for Rotation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let r_id = Face::R * *self == Face::R;
         let u_id = Face::U * *self == Face::U;
         let f_id = Face::F * *self == Face::F;
@@ -120,11 +122,5 @@ impl Display for Rotation {
         } else {
             write!(f, "@[R->{:?} | U->{:?}]", Face::R * *self, Face::U * *self)
         }
-    }
-}
-
-impl Debug for Rotation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(self, f)
     }
 }
