@@ -1,3 +1,4 @@
+use core::iter::IntoIterator;
 use std::{
     marker::PhantomData,
     ops::{Index, IndexMut},
@@ -136,7 +137,7 @@ impl DpIndex for Rotation {
     }
 
     fn to_index(&self, &(): &Self::Runtime) -> usize {
-        Self::all().position(|v| v == *self).unwrap()
+        Self::ALL.into_iter().position(|v| v == *self).unwrap()
     }
 }
 

@@ -85,7 +85,7 @@ fn compute(alg: &[Move], aux: &mut Arr, idx @ (l, r, _, _): Idx) -> Val {
 
     let mut min = None;
     for k in l + 1..=r {
-        for r1 in Rotation::all() {
+        for r1 in Rotation::ALL {
             for t1_p in Z4::ALL {
                 for t1_n in Z4::ALL {
                     let t1 = AxialMove::new((alg[l] * r1).axis(), t1_p, t1_n);

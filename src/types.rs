@@ -13,7 +13,7 @@ pub enum Axis {
 use Axis::*;
 
 impl Axis {
-    fn next(self) -> Self {
+    const fn next(self) -> Self {
         match self {
             X => Y,
             Y => Z,
@@ -21,12 +21,16 @@ impl Axis {
         }
     }
 
-    pub fn pos_face(self) -> Face {
+    pub const fn pos_face(self) -> Face {
         Face::new(self, false)
     }
 
-    pub fn neg_face(self) -> Face {
+    pub const fn neg_face(self) -> Face {
         Face::new(self, true)
+    }
+
+    pub const fn eq(self, rhs: Self) -> bool {
+        matches!((self, rhs), (X, X) | (Y, Y) | (Z, Z))
     }
 }
 
@@ -41,7 +45,7 @@ pub enum Face {
 }
 
 impl Face {
-    pub fn new(axis: Axis, neg: bool) -> Self {
+    pub const fn new(axis: Axis, neg: bool) -> Self {
         use Face::*;
         match (axis, neg) {
             (X, false) => R,
@@ -53,7 +57,7 @@ impl Face {
         }
     }
 
-    pub fn axis(self) -> Axis {
+    pub const fn axis(self) -> Axis {
         use Face::*;
         match self {
             R | L => X,
@@ -62,7 +66,7 @@ impl Face {
         }
     }
 
-    pub fn neg(self) -> bool {
+    pub const fn neg(self) -> bool {
         use Face::*;
         match self {
             R | U | F => false,
@@ -70,16 +74,16 @@ impl Face {
         }
     }
 
-    pub fn opposite(self) -> Face {
+    pub const fn opposite(self) -> Face {
         Self::new(self.axis(), !self.neg())
     }
 
-    pub fn is_opposite(self, rhs: Face) -> bool {
-        self.axis() == rhs.axis() && self.neg() != rhs.neg()
+    pub const fn is_opposite(self, rhs: Face) -> bool {
+        self.axis().eq(rhs.axis()) && self.neg() != rhs.neg()
     }
 
-    pub fn is_coaxial(self, rhs: Face) -> bool {
-        self.axis() == rhs.axis()
+    pub const fn is_coaxial(self, rhs: Face) -> bool {
+        self.axis().eq(rhs.axis())
     }
 }
 
@@ -93,7 +97,7 @@ pub enum Z4 {
 use Z4::*;
 
 impl Z4 {
-    fn next(self) -> Self {
+    const fn next(self) -> Self {
         match self {
             Zero => One,
             One => Two,
@@ -102,39 +106,51 @@ impl Z4 {
         }
     }
 
-    fn prev(self) -> Self {
+    const fn prev(self) -> Self {
         self.next().next().next()
     }
 
     pub const ALL: [Z4; 4] = [Zero, One, Two, Three];
 
-    pub fn val(self) -> u8 {
+    pub const fn val(self) -> u8 {
         self as u8
+    }
+
+    pub const fn neg(mut self) -> Self {
+        let mut res = Zero;
+        while !matches!(self, Zero) {
+            self = self.prev();
+            res = res.prev();
+        }
+        res
+    }
+
+    pub const fn add(mut self, mut rhs: Self) -> Self {
+        while !matches!(rhs, Zero) {
+            self = self.next();
+            rhs = rhs.prev();
+        }
+        self
+    }
+
+    pub const fn sub(self, rhs: Self) -> Self {
+        self.add(rhs.neg())
     }
 }
 
 impl Add for Z4 {
     type Output = Self;
 
-    fn add(mut self, mut rhs: Self) -> Self::Output {
-        while rhs != Zero {
-            self = self.next();
-            rhs = rhs.prev();
-        }
-        self
+    fn add(self, rhs: Self) -> Self::Output {
+        self.add(rhs)
     }
 }
 
 impl Neg for Z4 {
     type Output = Self;
 
-    fn neg(mut self) -> Self::Output {
-        let mut res = Zero;
-        while self != Zero {
-            self = self.prev();
-            res = res.prev();
-        }
-        res
+    fn neg(self) -> Self::Output {
+        self.neg()
     }
 }
 
@@ -142,7 +158,7 @@ impl Sub for Z4 {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
-        self + -rhs
+        self.sub(rhs)
     }
 }
 
@@ -165,28 +181,28 @@ pub struct Move {
 }
 
 impl Move {
-    pub fn new(face: Face, by: Z4) -> Self {
+    pub const fn new(face: Face, by: Z4) -> Self {
         Self { face, by }
     }
 
-    pub fn face(self) -> Face {
+    pub const fn face(self) -> Face {
         self.face
     }
 
-    pub fn by(self) -> Z4 {
+    pub const fn by(self) -> Z4 {
         self.by
     }
 
-    pub fn axis(self) -> Axis {
+    pub const fn axis(self) -> Axis {
         self.face().axis()
     }
 
-    pub fn commutes(self, rhs: Move) -> bool {
+    pub const fn commutes(self, rhs: Move) -> bool {
         self.face().is_coaxial(rhs.face())
     }
 
-    pub fn inv(self) -> Move {
-        Self::new(self.face(), -self.by())
+    pub const fn inv(self) -> Move {
+        Self::new(self.face(), self.by().neg())
     }
 }
 
@@ -257,43 +273,39 @@ pub struct AxialMove {
 }
 
 impl AxialMove {
-    pub fn new(mut axis: Axis, pos: Z4, neg: Z4) -> Self {
-        if pos == Zero && neg == Zero {
+    pub const fn new(mut axis: Axis, pos: Z4, neg: Z4) -> Self {
+        if matches!((pos, neg), (Zero, Zero)) {
             axis = X;
         }
         Self { axis, pos, neg }
     }
 
-    pub fn axis(self) -> Axis {
+    pub const fn axis(self) -> Axis {
         self.axis
     }
 
-    pub fn pos(self) -> Z4 {
+    pub const fn pos(self) -> Z4 {
         self.pos
     }
 
-    pub fn neg(self) -> Z4 {
+    pub const fn neg(self) -> Z4 {
         self.neg
     }
 
-    pub const ZERO: Self = Self {
-        axis: X,
-        pos: Zero,
-        neg: Zero,
-    };
+    pub const ZERO: Self = Self::new(X, Zero, Zero);
 
-    pub fn is_zero(self) -> bool {
-        self.pos() == Zero && self.neg() == Zero
+    pub const fn is_zero(self) -> bool {
+        matches!((self.pos(), self.neg()), (Zero, Zero))
     }
 
-    pub fn moves(self) -> (Move, Move) {
+    pub const fn moves(self) -> (Move, Move) {
         (
             Move::new(self.axis().pos_face(), self.pos()),
             Move::new(self.axis().neg_face(), self.neg()),
         )
     }
 
-    pub fn from_moves(a: Move, b: Move) -> Option<Self> {
+    pub const fn from_moves(a: Move, b: Move) -> Option<Self> {
         if !a.face().is_opposite(b.face()) {
             None
         } else {
@@ -305,8 +317,8 @@ impl AxialMove {
         }
     }
 
-    pub fn inv(self) -> AxialMove {
-        Self::new(self.axis(), -self.pos(), -self.neg())
+    pub const fn inv(self) -> AxialMove {
+        Self::new(self.axis(), self.pos().neg(), self.neg().neg())
     }
 
     pub fn add(self, rhs: AxialMove) -> Option<AxialMove> {
@@ -393,7 +405,7 @@ enum Diagonal {
 impl Diagonal {
     const ALL: [Self; 4] = [Self::UFR, Self::UFL, Self::DFR, Self::UBR];
 
-    fn from_u8(val: u8) -> Self {
+    const fn from_u8(val: u8) -> Self {
         Self::ALL[(val & 0b11) as usize]
     }
 }
@@ -425,14 +437,22 @@ impl Mul for Rotation {
 }
 
 impl Rotation {
-    fn to_array(self) -> [Diagonal; 4] {
-        core::array::from_fn(|i| Diagonal::from_u8(self.0 >> (2 * i)))
+    const fn to_array(self) -> [Diagonal; 4] {
+        let mut res = [Diagonal::UFR; 4];
+        let mut i = 0;
+        while i < res.len() {
+            res[i] = Diagonal::from_u8(self.0 >> (2 * i));
+            i += 1;
+        }
+        res
     }
 
-    fn from_array(arr: [Diagonal; 4]) -> Self {
+    const fn from_array(arr: [Diagonal; 4]) -> Self {
         let mut res = 0;
-        for (i, &v) in arr.iter().enumerate() {
-            res |= v as (u8) << (2 * i);
+        let mut i = 0;
+        while i < arr.len() {
+            res |= (arr[i] as u8) << (2 * i);
+            i += 1;
         }
         Self(res)
     }
@@ -476,16 +496,19 @@ impl Rotation {
 
     pub const ID: Self = Self(0b_11_10_01_00);
 
-    pub fn all() -> impl Iterator<Item = Self> {
-        core::array::from_fn::<_, 24, _>(|i| {
-            let j = i / 6;
-            let i = i % 6;
+    pub const ALL: [Rotation; 24] = {
+        let mut result = [Rotation::ID; 24];
+        let mut idx = 0;
+        while idx < 24 {
+            let j = idx / 6;
+            let i = idx % 6;
             let mut arr = Self::DATA[i];
             arr.rotate_right(j);
-            Self::from_array(arr)
-        })
-        .into_iter()
-    }
+            result[idx] = Self::from_array(arr);
+            idx += 1;
+        }
+        result
+    };
 
     pub fn axial(axis: Axis, by: Z4) -> Self {
         let mut out = [Diagonal::UFR; 4];
@@ -612,15 +635,15 @@ pub struct AxialRotation {
 }
 
 impl AxialRotation {
-    pub fn new(axis: Axis, by: Z4) -> Self {
+    pub const fn new(axis: Axis, by: Z4) -> Self {
         Self { axis, by }
     }
 
-    pub fn axis(self) -> Axis {
+    pub const fn axis(self) -> Axis {
         self.axis
     }
 
-    pub fn by(self) -> Z4 {
+    pub const fn by(self) -> Z4 {
         self.by
     }
 }
