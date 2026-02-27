@@ -543,7 +543,7 @@ impl Rotation {
         LUT[self.0 as usize]
     }
 
-    pub const fn mul(self, rhs: Self) -> Self {
+    pub const fn mul_(self, rhs: Self) -> Self {
         let this = self.to_array();
         let rhs = rhs.to_array();
         let mut out = [Diagonal::UFR; 4];
@@ -553,6 +553,26 @@ impl Rotation {
             i += 1;
         }
         Self::from_array(out)
+    }
+
+    pub const fn mul(self, rhs: Self) -> Self {
+        const LUT: [[Rotation; 24]; 24] = {
+            let mut out = [[Rotation::ID; 24]; 24];
+            let mut i = 0;
+            while i < Rotation::ALL.len() {
+                let mut j = 0;
+                while j < Rotation::ALL.len() {
+                    let lhs = Rotation::ALL[i];
+                    let rhs = Rotation::ALL[j];
+                    out[i][j] = lhs.mul_(rhs);
+                    j += 1;
+                }
+                i += 1;
+            }
+            out
+        };
+
+        LUT[self.index() as usize][rhs.index() as usize]
     }
 
     pub const ID: Self = Self(0b_11_10_01_00);
