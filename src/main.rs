@@ -1,5 +1,5 @@
 use itertools::{Either, Itertools};
-use rkt_solver::{MoveOrRot, solve, types::Move};
+use rkt_solver::{MoveOrRot, data::Move, solve};
 
 fn main() {
     let val = std::env::args().nth(1).unwrap();

@@ -1,12 +1,12 @@
 use std::fmt::Debug;
 
 use crate::{
+    data::{AxialMove, Move, Rotation, Z4},
     dp::DpArray,
-    types::{AxialMove, Move, Rotation, Z4},
 };
 
+pub mod data;
 mod dp;
-pub mod types;
 
 #[derive(Clone, Copy)]
 pub enum MoveOrRot {

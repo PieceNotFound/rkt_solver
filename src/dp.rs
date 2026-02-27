@@ -3,7 +3,7 @@ use std::{
     ops::{Index, IndexMut},
 };
 
-use crate::types::{AxialMove, Axis, Face, Rotation, Z4};
+use crate::data::{AxialMove, Axis, Face, Rotation, Z4};
 
 pub trait DpIndex {
     type Runtime;
