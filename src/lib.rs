@@ -5,8 +5,11 @@
     clippy::return_self_not_must_use
 )]
 
-use core::{cell::UnsafeCell, mem::MaybeUninit};
-use std::fmt::Debug;
+use core::{
+    cell::UnsafeCell,
+    fmt::{self, Debug},
+    mem::MaybeUninit,
+};
 
 use crate::{
     data::{AxialMove, Axis, Move, Rotation, Z4},
@@ -23,7 +26,7 @@ pub enum MoveOrRot {
 }
 
 impl Debug for MoveOrRot {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Move(arg0) => Debug::fmt(arg0, f),
             Self::Rot(arg0) => Debug::fmt(arg0, f),
