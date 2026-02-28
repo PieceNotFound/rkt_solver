@@ -146,19 +146,25 @@ pub struct DpArray<T, I: DpIndex> {
     _phantom: PhantomData<fn(I) -> T>,
 }
 
-impl<T: Default, I: DpIndex> DpArray<T, I> {
-    pub fn new(v: I::Runtime) -> Self {
+impl<T, I: DpIndex> DpArray<T, I> {
+    pub fn new_with(v: I::Runtime, f: impl FnMut() -> T) -> Self
+    where
+        T: Default,
+    {
         Self {
-            inner: core::iter::repeat_with(Default::default)
-                .take(I::size(&v))
-                .collect(),
+            inner: core::iter::repeat_with(f).take(I::size(&v)).collect(),
             v,
             _phantom: PhantomData,
         }
     }
-}
 
-impl<T, I: DpIndex> DpArray<T, I> {
+    pub fn new(v: I::Runtime) -> Self
+    where
+        T: Default,
+    {
+        Self::new_with(v, Default::default)
+    }
+
     pub fn get(&self, i: &I) -> &T {
         &self.inner[i.to_index(&self.v)]
     }

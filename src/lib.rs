@@ -1,7 +1,8 @@
+use core::{cell::UnsafeCell, mem::MaybeUninit};
 use std::fmt::Debug;
 
 use crate::{
-    data::{AxialMove, Move, Rotation, Z4},
+    data::{AxialMove, Axis, Move, Rotation, Z4},
     dp::DpArray,
 };
 
@@ -23,32 +24,129 @@ impl Debug for MoveOrRot {
     }
 }
 
+struct Slot<T> {
+    inner: UnsafeCell<MaybeUninit<T>>,
+}
+
+impl<T> Default for Slot<T> {
+    fn default() -> Self {
+        Self {
+            inner: UnsafeCell::new(MaybeUninit::uninit()),
+        }
+    }
+}
+
+impl<T> Slot<T> {
+    unsafe fn get(&self) -> &T {
+        unsafe { (&*self.inner.get()).assume_init_ref() }
+    }
+
+    unsafe fn set(&self, val: T) {
+        unsafe { &mut *self.inner.get() }.write(val);
+    }
+}
+
+unsafe impl<T: Send> Send for Slot<T> {}
+unsafe impl<T: Sync> Sync for Slot<T> {}
+
 type Idx = (usize, usize, Rotation, AxialMove);
 type Res = usize;
 type Reconstructed = Vec<MoveOrRot>;
 type DpChoice = (usize, Rotation, AxialMove);
 type Val = Option<(Res, Option<DpChoice>)>;
-type Arr = DpArray<Option<Val>, Idx>;
+type Arr = DpArray<Slot<Val>, Idx>;
 
-pub fn solve(alg: &[Move]) -> Option<Reconstructed> {
-    let n = alg.len();
-    let mut aux: Arr = DpArray::new((n + 1, n + 1, (), ()));
-    let root = (0, n, Rotation::ID, AxialMove::ZERO);
-    reconstruct(alg, &mut aux, root)
+struct Ctx<'a> {
+    alg: &'a [Move],
+    aux: Arr,
+    #[cfg(debug_assertions)]
+    up_to_sz: usize,
 }
 
-fn get(alg: &[Move], aux: &mut Arr, idx: Idx) -> Val {
-    if let Some(val) = &aux[idx] {
-        *val
-    } else {
-        let val = compute(alg, aux, idx);
-        aux[idx] = Some(val);
-        val
+// TODO: some of these methods should be marked `unsafe` but aren't. eventually they should be made
+//       safe by adding checks (but only under cfg(debug_assertions))
+impl<'a> Ctx<'a> {
+    fn new(alg: &'a [Move]) -> Self {
+        let n = alg.len();
+        let aux = DpArray::new((n + 1, n + 1, (), ()));
+        Self {
+            alg,
+            aux,
+            #[cfg(debug_assertions)]
+            up_to_sz: 0,
+        }
+    }
+
+    fn alg(&self) -> &'a [Move] {
+        self.alg
+    }
+
+    fn get_full(&self, idx: Idx) -> Val {
+        #[cfg(debug_assertions)]
+        {
+            let (l, r, _, _) = idx;
+            let sz = r - l;
+            if sz >= self.up_to_sz {
+                panic!("Attempted to get value from DP array before it was initialised");
+            }
+        }
+
+        *unsafe { self.aux[idx].get() }
+    }
+
+    fn get(&self, idx: Idx) -> Option<Res> {
+        self.get_full(idx).map(|v| v.0)
+    }
+
+    fn set(&self, idx: Idx, val: Val) {
+        #[cfg(debug_assertions)]
+        {
+            let (l, r, _, _) = idx;
+            let sz = r - l;
+            if sz != self.up_to_sz {
+                panic!("Attempted to set value in DP array at wrong stage");
+            }
+        }
+
+        unsafe { self.aux[idx].set(val) }
+    }
+
+    fn increment_sz(&mut self) {
+        #[cfg(debug_assertions)]
+        {
+            self.up_to_sz += 1;
+        }
     }
 }
 
-fn rec(alg: &[Move], aux: &mut Arr, idx: Idx) -> Option<Res> {
-    get(alg, aux, idx).map(|v| v.0)
+pub fn solve(alg: &[Move]) -> Option<Reconstructed> {
+    let n = alg.len();
+    let mut ctx = Ctx::new(alg);
+
+    for sz in 0..=n {
+        std::thread::scope(|scope| {
+            for l in 0..=(n - sz) {
+                let r = l + sz;
+                for rotation in Rotation::ALL {
+                    let ctx = &ctx;
+                    scope.spawn(move || {
+                        for axis in [Axis::X, Axis::Y, Axis::Z] {
+                            for p in Z4::ALL {
+                                for n in Z4::ALL {
+                                    let ax = AxialMove::new(axis, p, n);
+                                    let idx = (l, r, rotation, ax);
+                                    ctx.set(idx, compute(ctx, idx));
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+        });
+        ctx.increment_sz();
+    }
+
+    reconstruct(&ctx, (0, n, Rotation::ID, AxialMove::ZERO))
 }
 
 enum BaseCase {
@@ -76,10 +174,11 @@ fn base_case(alg: &[Move], (l, r, rot, ax): Idx) -> Option<BaseCase> {
     None
 }
 
-fn compute(alg: &[Move], aux: &mut Arr, idx @ (l, r, _, _): Idx) -> Val {
-    match base_case(alg, idx) {
+fn compute(ctx: &Ctx<'_>, idx @ (l, r, _, _): Idx) -> Val {
+    match base_case(ctx.alg(), idx) {
         Some(BaseCase::Impossible) => return None,
         Some(BaseCase::Just(rot)) => return Some((if rot == Rotation::ID { 0 } else { 1 }, None)),
+
         None => {}
     }
 
@@ -88,11 +187,11 @@ fn compute(alg: &[Move], aux: &mut Arr, idx @ (l, r, _, _): Idx) -> Val {
         for r1 in Rotation::ALL {
             for t1_p in Z4::ALL {
                 for t1_n in Z4::ALL {
-                    let t1 = AxialMove::new((alg[l] * r1).axis(), t1_p, t1_n);
+                    let t1 = AxialMove::new((ctx.alg()[l] * r1).axis(), t1_p, t1_n);
                     let choice = (k, r1, t1);
-                    let (f1, sub1, sub2) = apply_choice(alg, idx, choice);
-                    let sub1 = rec(alg, aux, sub1);
-                    let sub2 = rec(alg, aux, sub2);
+                    let (f1, sub1, sub2) = apply_choice(ctx.alg(), idx, choice);
+                    let sub1 = ctx.get(sub1);
+                    let sub2 = ctx.get(sub2);
                     let new = post_computation((f1, sub1, sub2));
                     min_into(&mut min, new, choice);
                 }
@@ -103,8 +202,8 @@ fn compute(alg: &[Move], aux: &mut Arr, idx @ (l, r, _, _): Idx) -> Val {
     min
 }
 
-fn reconstruct(alg: &[Move], aux: &mut Arr, idx: Idx) -> Option<Reconstructed> {
-    match base_case(alg, idx) {
+fn reconstruct(ctx: &Ctx<'_>, idx: Idx) -> Option<Reconstructed> {
+    match base_case(ctx.alg(), idx) {
         Some(BaseCase::Impossible) => return None,
         Some(BaseCase::Just(rot)) => {
             return Some(if rot == Rotation::ID {
@@ -116,11 +215,11 @@ fn reconstruct(alg: &[Move], aux: &mut Arr, idx: Idx) -> Option<Reconstructed> {
         None => {}
     }
 
-    let (_, choice) = get(alg, aux, idx)?;
+    let (_, choice) = ctx.get_full(idx)?;
     let choice = choice.unwrap();
-    let (f1, sub1, sub2) = apply_choice(alg, idx, choice);
-    let sub1 = reconstruct(alg, aux, sub1)?;
-    let sub2 = reconstruct(alg, aux, sub2)?;
+    let (f1, sub1, sub2) = apply_choice(ctx.alg(), idx, choice);
+    let sub1 = reconstruct(ctx, sub1)?;
+    let sub2 = reconstruct(ctx, sub2)?;
     Some(post_reconstruction((f1, sub1, sub2)))
 }
 
