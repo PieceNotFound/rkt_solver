@@ -1,3 +1,10 @@
+#![warn(clippy::pedantic)]
+#![allow(
+    clippy::enum_glob_use,
+    clippy::must_use_candidate,
+    clippy::return_self_not_must_use
+)]
+
 use core::{cell::UnsafeCell, mem::MaybeUninit};
 use std::fmt::Debug;
 
@@ -86,9 +93,10 @@ impl<'a> Ctx<'a> {
         {
             let (l, r, _, _) = idx;
             let sz = r - l;
-            if sz >= self.up_to_sz {
-                panic!("Attempted to get value from DP array before it was initialised");
-            }
+            assert!(
+                sz < self.up_to_sz,
+                "Attempted to get value from DP array before it was initialised"
+            );
         }
 
         *unsafe { self.aux[idx].get() }
@@ -103,9 +111,10 @@ impl<'a> Ctx<'a> {
         {
             let (l, r, _, _) = idx;
             let sz = r - l;
-            if sz != self.up_to_sz {
-                panic!("Attempted to set value in DP array at wrong stage");
-            }
+            assert!(
+                sz == self.up_to_sz,
+                "Attempted to set value in DP array at wrong stage"
+            );
         }
 
         unsafe { self.aux[idx].set(val) }
@@ -177,7 +186,7 @@ fn base_case(alg: &[Move], (l, r, rot, ax): Idx) -> Option<BaseCase> {
 fn compute(ctx: &Ctx<'_>, idx @ (l, r, _, _): Idx) -> Val {
     match base_case(ctx.alg(), idx) {
         Some(BaseCase::Impossible) => return None,
-        Some(BaseCase::Just(rot)) => return Some((if rot == Rotation::ID { 0 } else { 1 }, None)),
+        Some(BaseCase::Just(rot)) => return Some((usize::from(rot != Rotation::ID), None)),
 
         None => {}
     }
@@ -240,7 +249,7 @@ fn apply_choice(alg: &[Move], (l, r, rot, ax): Idx, (k, r1, t1): DpChoice) -> (M
         t0 - ((AxialMove::from(alg[l]) + (t1 * -r1)) * r0),
     );
 
-    return (f1, sub1, sub2);
+    (f1, sub1, sub2)
 }
 
 fn post_computation((f1, sub1, sub2): (Move, Option<Res>, Option<Res>)) -> Option<Res> {

@@ -9,6 +9,7 @@ use crate::data::{
 pub struct Rotation(u8);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
+#[expect(clippy::upper_case_acronyms)]
 enum Diagonal {
     UFR,
     UFL,
@@ -130,8 +131,8 @@ impl Rotation {
         let mut out = [Diagonal::UFR; 4];
         let this = self.to_array();
         let mut i = 0;
-        while i < this.len() {
-            out[this[i] as usize] = Diagonal::from_u8(i as u8);
+        while i as (usize) < this.len() {
+            out[this[i as usize] as usize] = Diagonal::from_u8(i);
             i += 1;
         }
         Self::from_array(out)
@@ -204,8 +205,8 @@ impl Rotation {
         const MAP: [u8; 256] = {
             let mut out = [0; 256];
             let mut i = 0;
-            while i < Rotation::ALL.len() {
-                out[Rotation::ALL[i].0 as usize] = i as u8;
+            while i as (usize) < Rotation::ALL.len() {
+                out[Rotation::ALL[i as usize].0 as usize] = i;
                 i += 1;
             }
             out
@@ -223,6 +224,7 @@ impl Rotation {
         Self::from_array(out)
     }
 
+    #[expect(clippy::missing_panics_doc, reason = "the `unwrap` never fails")]
     pub fn to_axials(self) -> impl Iterator<Item = AxialRotation> {
         let r_id = Face::R * self == Face::R;
         let u_id = Face::U * self == Face::U;

@@ -108,7 +108,7 @@ impl DpIndex for bool {
     }
 
     fn to_index(&self, &(): &Self::Runtime) -> usize {
-        *self as usize
+        usize::from(*self)
     }
 }
 

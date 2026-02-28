@@ -174,14 +174,14 @@ impl AxialMove {
     }
 
     pub const fn from_moves(a: Move, b: Move) -> Option<Self> {
-        if !a.face().is_opposite(b.face()) {
-            None
-        } else {
+        if a.face().is_opposite(b.face()) {
             Some(if a.face().neg() {
                 Self::new(a.axis(), b.by(), a.by())
             } else {
                 Self::new(a.axis(), a.by(), b.by())
             })
+        } else {
+            None
         }
     }
 
@@ -189,6 +189,7 @@ impl AxialMove {
         Self::new(self.axis(), self.pos().neg(), self.neg().neg())
     }
 
+    #[expect(clippy::should_implement_trait)]
     pub fn add(self, rhs: AxialMove) -> Option<AxialMove> {
         if self.is_zero() {
             Some(rhs)
