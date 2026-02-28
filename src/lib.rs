@@ -228,14 +228,16 @@ fn apply_choice(alg: &[Move], (l, r, rot, ax): Idx, (k, r1, t1): DpChoice) -> (M
     let t0 = ax;
 
     let f1 = alg[l];
-    let t2 = -AxialMove::from(f1 * r1) + AxialMove::from(alg[l] * r1) + t1;
+    // let t2 = -AxialMove::from(f1 * r1) + AxialMove::from(alg[l] * r1) + t1;
+    let t2 = t1;
 
     let sub1 = (l + 1, k, r1, t2);
     let sub2 = (
         k,
         r,
         -r1 * r0,
-        t0 - ((AxialMove::from(alg[l] * r1) + t1) * (-r1 * r0)),
+        // t0 - ((AxialMove::from(alg[l] * r1) + t1) * (-r1 * r0)),
+        t0 - ((AxialMove::from(alg[l]) + (t1 * -r1)) * r0),
     );
 
     return (f1, sub1, sub2);
