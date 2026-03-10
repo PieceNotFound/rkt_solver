@@ -61,7 +61,7 @@ unsafe impl<T: Sync> Sync for Slot<T> {}
 
 type Idx = (usize, usize, Rotation, AxialMove);
 type Res = usize;
-type Reconstructed = Vec<MoveOrRot>;
+type Reconstructed = (Vec<MoveOrRot>, Res);
 type DpChoice = (usize, Rotation, AxialMove);
 type Val = Option<(Res, Option<DpChoice>)>;
 type Arr = DpArray<Slot<Val>, Idx>;
@@ -131,7 +131,7 @@ impl<'a> Ctx<'a> {
     }
 }
 
-pub fn solve(alg: &[Move]) -> Option<Reconstructed> {
+pub fn solve(alg: &[Move]) -> impl Fn(Rotation, AxialMove) -> Option<Reconstructed> {
     let n = alg.len();
     let mut ctx = Ctx::new(alg);
 
@@ -158,12 +158,16 @@ pub fn solve(alg: &[Move]) -> Option<Reconstructed> {
         ctx.increment_sz();
     }
 
-    reconstruct(&ctx, (0, n, Rotation::ID, AxialMove::ZERO))
+    move |rotation, axial_move| reconstruct(&ctx, (0, n, rotation, axial_move))
 }
 
 enum BaseCase {
     Impossible,
-    Just(Rotation),
+    Just(Rotation, Res),
+}
+
+fn base_cost(rot: Rotation) -> Res {
+    usize::from(rot != Rotation::ID)
 }
 
 fn base_case(alg: &[Move], (l, r, rot, ax): Idx) -> Option<BaseCase> {
@@ -173,7 +177,7 @@ fn base_case(alg: &[Move], (l, r, rot, ax): Idx) -> Option<BaseCase> {
 
     if l == r {
         return Some(if ax.is_zero() {
-            BaseCase::Just(rot)
+            BaseCase::Just(rot, base_cost(rot))
         } else {
             BaseCase::Impossible
         });
@@ -189,7 +193,7 @@ fn base_case(alg: &[Move], (l, r, rot, ax): Idx) -> Option<BaseCase> {
 fn compute(ctx: &Ctx<'_>, idx @ (l, r, _, _): Idx) -> Val {
     match base_case(ctx.alg(), idx) {
         Some(BaseCase::Impossible) => return None,
-        Some(BaseCase::Just(rot)) => return Some((usize::from(rot != Rotation::ID), None)),
+        Some(BaseCase::Just(_, cost)) => return Some((cost, None)),
 
         None => {}
     }
@@ -217,12 +221,15 @@ fn compute(ctx: &Ctx<'_>, idx @ (l, r, _, _): Idx) -> Val {
 fn reconstruct(ctx: &Ctx<'_>, idx: Idx) -> Option<Reconstructed> {
     match base_case(ctx.alg(), idx) {
         Some(BaseCase::Impossible) => return None,
-        Some(BaseCase::Just(rot)) => {
-            return Some(if rot == Rotation::ID {
-                vec![]
-            } else {
-                vec![MoveOrRot::Rot(rot)]
-            });
+        Some(BaseCase::Just(rot, cost)) => {
+            return Some((
+                if rot == Rotation::ID {
+                    Vec::new()
+                } else {
+                    vec![MoveOrRot::Rot(rot)]
+                },
+                cost,
+            ));
         }
         None => {}
     }
@@ -280,8 +287,8 @@ fn post_reconstruction((f1, sub1, sub2): (Move, Reconstructed, Reconstructed)) -
     if f1.by() != Z4::Zero {
         total.push(MoveOrRot::Move(f1));
     }
-    total.extend(sub1);
-    total.extend(sub2);
+    total.extend(sub1.0);
+    total.extend(sub2.0);
 
-    total
+    (total, sub1.1 + sub2.1)
 }

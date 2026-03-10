@@ -22,6 +22,8 @@ impl Axis {
         }
     }
 
+    pub const ALL: [Axis; 3] = [Axis::X, Axis::Y, Axis::Z];
+
     pub const fn pos_face(self) -> Face {
         Face::new(self, false)
     }
@@ -123,6 +125,10 @@ impl Move {
     pub const fn inv(self) -> Move {
         Self::new(self.face(), self.by().neg())
     }
+
+    pub const fn is_zero(self) -> bool {
+        matches!(self.by, Z4::Zero)
+    }
 }
 
 impl Neg for Move {
@@ -161,6 +167,24 @@ impl AxialMove {
     }
 
     pub const ZERO: Self = Self::new(X, Z4::Zero, Z4::Zero);
+
+    pub const ALL: [Self; 46] = const {
+        let mut out = [Self::ZERO; 46];
+
+        let mut i = 0;
+        let mut skipped = 0;
+        while i < 48 {
+            let turn = AxialMove::new(Axis::ALL[i % 3], Z4::ALL[(i / 3) % 4], Z4::ALL[i / 12]);
+            if turn.is_zero() && matches!(turn.axis(), Axis::X) {
+                skipped += 1;
+            } else {
+                out[i - skipped] = turn;
+            }
+            i += 1;
+        }
+
+        out
+    };
 
     pub const fn is_zero(self) -> bool {
         matches!((self.pos(), self.neg()), (Z4::Zero, Z4::Zero))
